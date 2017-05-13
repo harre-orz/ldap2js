@@ -1,0 +1,7 @@
+[package]
+name = "ldap2js"
+version = "0.1.0"
+authors = ["Haruhiko Uchida <harre.orz@gmail.com>"]
+
+[dependencies]
+base64 = "*"
