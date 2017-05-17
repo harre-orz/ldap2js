@@ -24,6 +24,8 @@ fn base64_decode(value: &mut String) {
 
 fn escape(value: &mut String) {
     *value = value.replace("\"", "\\\"");
+    *value = value.replace("\r", "\\\r");
+    *value = value.replace("\n", "\\\n");
 }
 
 fn main() {
