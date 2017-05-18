@@ -3,10 +3,8 @@ extern crate base64;
 use std::io;
 use std::env;
 
-const FST: &'static str = "[{";
-const SEP: &'static str = ",";
-const LST: &'static str = ",{";
-const MUL: &'static str = "";
+#[derive(PartialEq, Eq, Debug)]
+enum State { First, Separate, Next, List }
 
 fn base64_decode(value: &mut String) {
     use base64::decode;
@@ -23,18 +21,22 @@ fn base64_decode(value: &mut String) {
 }
 
 fn escape(value: &mut String) {
-    *value = value.replace("\"", "\\\"");
-    *value = value.replace("\r", "\\\r");
-    *value = value.replace("\n", "\\\n");
+    *value = value
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("/", "\\/")
+        .replace("\t", "\\t")
+        .replace("\r", "\\r")
+        .replace("\n", "\\n");
 }
 
 fn main() {
     let collect_params: Vec<String> = env::args().skip(1).collect();
 
     let mut line = String::new();
-    let mut name = String::new();
+    let mut key = String::new();
     let mut value = String::new();
-    let mut state = FST;
+    let mut state = State::First;
     let mut encoding = false;
     let mut show = false;
 
@@ -42,68 +44,121 @@ fn main() {
         line.clear();
         match io::stdin().read_line(&mut line) {
             Ok(0) | Err(_) => {
-                if state == LST {
+                if state == State::Next {
                     println!("]");
                 }
                 return;
             },
             Ok(1) => {
-                if show {
-                    if encoding {
-                        base64_decode(&mut value);
-                    }
-
-                    escape(&mut value);
-                    if state == SEP {
-                        print!("\"{}\"", value);
-                    }
-                    if state == MUL {
-                        print!(",\"{}\"]", value);
-                    }
-                    value.clear();
-                }
-                print!("{}", '}');
-                state = LST;
-            },
-            Ok(n) => {
-                let line = &line[..n];
-                if line.starts_with('#') {
-                    // do nothing
-                } else if !line.starts_with(' ') {
-                    let (key, val) = line.split_at(line.find(':').unwrap());
-                    if name != key {
-                        if state == SEP && show {
+                match state {
+                    State::Separate => {
+                        if show {
                             if encoding {
                                 base64_decode(&mut value);
                             }
                             escape(&mut value);
                             print!("\"{}\"", value);
                         }
-
-                        show = collect_params.is_empty() || collect_params.iter().any(|x| x == key);
+                        print!("}}");
+                    },
+                    State::List => {
                         if show {
-                            name = key.to_string();
-                            print!("{}\"{}\":", state, name);
-
-                            encoding = val.starts_with("::");
-                            value = val[if encoding { 2 } else { 1 }..].trim().to_string();
-                            state = SEP;
+                            if encoding {
+                                base64_decode(&mut value);
+                            }
+                            escape(&mut value);
+                            print!(",\"{}\"]", value);
                         }
-                    } else if show {
-                        if encoding {
-                            base64_decode(&mut value);
-                        }
-                        escape(&mut value);
+                        print!("}}");
+                    },
+                    _ => {},
+                }
+                state = State::Next;
+                key.clear();
+            },
+            Ok(n) => {
+                let line = &line[..n];
+                if line.starts_with('#') {
+                    // do nothing
+                } else if !line.starts_with(' ') {
+                    let (key_, value_) = line.split_at(line.find(':').unwrap());
+                    match state {
+                        State::First => {
+                            show = collect_params.is_empty() || collect_params.iter().any(|k| k == key_);
+                            if show {
+                                state = State::Separate;
+                                key = key_.to_string();
+                                print!("[{{\"{}\":", key);
+                                encoding = value_.starts_with("::");
+                                value = value_[if encoding { 2 } else { 1 }..].trim().to_string();
+                            }
+                        },
+                        State::Separate => {
+                            if key_ == key {
+                                if show {
+                                    state = State::List;
+                                    if encoding {
+                                        base64_decode(&mut value);
+                                    }
+                                    escape(&mut value);
+                                    print!("[\"{}\"", value);
+                                    encoding = value_.starts_with("::");
+                                    value = value_[if encoding { 2 } else { 1 }..].trim().to_string();
+                                }
+                            } else {
+                                if show {
+                                    if encoding {
+                                        base64_decode(&mut value);
+                                    }
+                                    escape(&mut value);
+                                    print!("\"{}\"", value);
+                                }
 
-                        if state == SEP {
-                            print!("[\"{}\"", value);
-                        } else {
-                            print!(",\"{}\"", value);
-                        }
+                                show = collect_params.is_empty() || collect_params.iter().any(|key| key == key_);
+                                if show {
+                                    key = key_.to_string();
+                                    print!(",\"{}\":", key);
+                                    encoding = value_.starts_with("::");
+                                    value = value_[if encoding { 2 } else { 1 }..].trim().to_string();
+                                }
+                            }
+                        },
+                        State::List => {
+                            if key_ == key {
+                                if show {
+                                    print!(",\"{}\"", value);
+                                    encoding = value_.starts_with("::");
+                                    value = value_[if encoding { 2 } else { 1 }..].trim().to_string();
+                                }
+                            } else {
+                                if show { 
+                                    if encoding {
+                                        base64_decode(&mut value);
+                                    }
+                                    escape(&mut value);
+                                    print!("\"{}\"", value);
+                                }
 
-                        encoding = val.starts_with("::");
-                        value = val[if encoding { 2 } else { 1 }..].trim().to_string();
-                        state = MUL;
+                                show = collect_params.is_empty() || collect_params.iter().any(|key| key == key_);
+                                if show {
+                                    state = State::Separate;
+                                    key = key_.to_string();
+                                    print!(",\"{}\":", key);
+                                    encoding = value_.starts_with("::");
+                                    value = value_[if encoding { 2 } else { 1 }..].trim().to_string();
+                                }
+                            }
+                        },
+                        State::Next => {
+                            show = collect_params.is_empty() || collect_params.iter().any(|key| key == key_);
+                            if show {
+                                state = State::Separate;
+                                key = key_.to_string();
+                                print!(",{{\"{}\":", key);
+                                encoding = value_.starts_with("::");
+                                value = value_[if encoding { 2 } else { 1 }..].trim().to_string();
+                            }
+                        },
                     }
                 } else {
                     value += line.trim();
