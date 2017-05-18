@@ -40,6 +40,7 @@ fn main() {
     let mut encoding = false;
     let mut show = false;
 
+    print!("[");
     loop {
         line.clear();
         match io::stdin().read_line(&mut line) {
@@ -88,7 +89,7 @@ fn main() {
                             if show {
                                 state = State::Separate;
                                 key = key_.to_string();
-                                print!("[{{\"{}\":", key);
+                                print!("{{\"{}\":", key);
                                 encoding = value_.starts_with("::");
                                 value = value_[if encoding { 2 } else { 1 }..].trim().to_string();
                             }
@@ -131,7 +132,7 @@ fn main() {
                                     value = value_[if encoding { 2 } else { 1 }..].trim().to_string();
                                 }
                             } else {
-                                if show { 
+                                if show {
                                     if encoding {
                                         base64_decode(&mut value);
                                     }
