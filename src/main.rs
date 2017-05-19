@@ -45,13 +45,13 @@ fn main() {
         line.clear();
         match io::stdin().read_line(&mut line) {
             Ok(0) | Err(_) => {
-                if state == State::Next {
-                    println!("]");
-                }
+                println!("]");
                 return;
             },
             Ok(1) => {
                 match state {
+                    State::First => {},
+                    State::Next => unreachable!(),
                     State::Separate => {
                         if show {
                             if encoding {
@@ -72,7 +72,6 @@ fn main() {
                         }
                         print!("}}");
                     },
-                    _ => {},
                 }
                 state = State::Next;
                 key.clear();
@@ -81,7 +80,9 @@ fn main() {
                 let line = &line[..n];
                 if line.starts_with('#') {
                     // do nothing
-                } else if !line.starts_with(' ') {
+                } else if line.starts_with(' ') {
+                    value += line.trim();
+                } else {
                     let (key_, value_) = line.split_at(line.find(':').unwrap());
                     match state {
                         State::First => {
@@ -90,6 +91,16 @@ fn main() {
                                 state = State::Separate;
                                 key = key_.to_string();
                                 print!("{{\"{}\":", key);
+                                encoding = value_.starts_with("::");
+                                value = value_[if encoding { 2 } else { 1 }..].trim().to_string();
+                            }
+                        },
+                        State::Next => {
+                            show = collect_params.is_empty() || collect_params.iter().any(|key| key == key_);
+                            if show {
+                                state = State::Separate;
+                                key = key_.to_string();
+                                print!(",{{\"{}\":", key);
                                 encoding = value_.starts_with("::");
                                 value = value_[if encoding { 2 } else { 1 }..].trim().to_string();
                             }
@@ -137,7 +148,7 @@ fn main() {
                                         base64_decode(&mut value);
                                     }
                                     escape(&mut value);
-                                    print!("\"{}\"", value);
+                                    print!(",\"{}\"]", value);
                                 }
 
                                 show = collect_params.is_empty() || collect_params.iter().any(|key| key == key_);
@@ -150,19 +161,7 @@ fn main() {
                                 }
                             }
                         },
-                        State::Next => {
-                            show = collect_params.is_empty() || collect_params.iter().any(|key| key == key_);
-                            if show {
-                                state = State::Separate;
-                                key = key_.to_string();
-                                print!(",{{\"{}\":", key);
-                                encoding = value_.starts_with("::");
-                                value = value_[if encoding { 2 } else { 1 }..].trim().to_string();
-                            }
-                        },
                     }
-                } else {
-                    value += line.trim();
                 }
             },
         }
