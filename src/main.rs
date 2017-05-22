@@ -1,23 +1,12 @@
 extern crate base64;
 
-use std::io;
+use std::io::{self, Write};
 use std::env;
-use std::fmt;
 
-#[derive(PartialEq, Eq)]
-enum State { Init, Collon, Comma, Seq }
-
-impl fmt::Display for State {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &State::Init => write!(f, "{{"),
-            &State::Collon => write!(f, "["),
-            &State::Comma => write!(f, ",{{"),
-            &State::Seq => write!(f, ","),
-        }
-    }
-}
-
+const INIT:   &'static [u8] = b"{";
+const COLLON: &'static [u8] = b"[";
+const COMMA:  &'static [u8] = b",{";
+const SEQ:    &'static [u8] = b",";
 
 fn line_escape(value: &str) -> String {
     let mut s = String::new();
@@ -105,7 +94,7 @@ fn main() {
     let mut line = String::new();
     let mut key = String::new();
     let mut value: (String, fn(&str) -> String) = (String::new(), line_escape);
-    let mut state = State::Init;
+    let mut state = INIT;
     let mut visible = false;
 
     print!("[");
@@ -117,18 +106,18 @@ fn main() {
                 return;
             },
             Ok(1) => {
-                if state == State::Init || state == State::Comma {
+                if state == INIT || state == COMMA {
                     continue;
                 }
                 if visible {
-                    if state == State::Collon {
+                    if state == COLLON {
                         print!("\"{}\"", encoding(&value));
-                    } else /* state == State::Seq */ {
+                    } else /* state == SEQ */ {
                         print!(",\"{}\"]", encoding(&value));
                     }
                 }
                 print!("}}");
-                state = State::Comma;
+                state = COMMA;
                 key.clear();
             },
             Ok(n) => {
@@ -145,26 +134,28 @@ fn main() {
                 let (key_, value_) = line.split_at(line.find(':').unwrap());
                 if visible {
                     if key_ == key {
-                        print!("{}\"{}\"", state, encoding(&value));
+                        io::stdout().write(state).unwrap();
+                        print!("\"{}\"", encoding(&value));
                         value = reset_value(value_);
-                        state = State::Seq;
+                        state = SEQ;
                         continue;
                     }
-                    match state {
-                        State::Collon => print!("\"{}\"", encoding(&value)),
-                        State::Seq => print!(",\"{}\"]", encoding(&value)),
-                        _ => {},
+                    if state == COLLON {
+                        print!("\"{}\"", encoding(&value));
+                    } else if state == SEQ {
+                        print!(",\"{}\"]", encoding(&value));
                     }
                 }
 
                 visible = collect_params.is_empty() || collect_params.iter().any(|key| key == key_);
                 if visible {
                     key = key_.to_string();
-                    if state == State::Collon {
+                    if state == COLLON {
                         print!(",\"{}\":", key);
                     } else {
-                        print!("{}\"{}\":", state, key);
-                        state = State::Collon;
+                        io::stdout().write(state).unwrap();
+                        print!("\"{}\":", key);
+                        state = COLLON;
                     }
                     value = reset_value(value_);
                 }
