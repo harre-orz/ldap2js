@@ -76,24 +76,13 @@ fn base64_escape(value: &str) -> String {
     return line_escape(value);
 }
 
-fn encoding(value: &(String,fn(&str) -> String)) -> String {
-    value.1(&value.0)
-}
-
-fn reset_value(value_: &str) -> (String, fn(&str) -> String) {
-    if value_.starts_with("::") {
-        (value_[2..].trim().to_string(), base64_escape)
-    } else {
-        (value_[1..].trim().to_string(), line_escape)
-    }
-}
-
 fn main() {
     let collect_params: Vec<String> = env::args().skip(1).collect();
 
     let mut line = String::new();
     let mut key = String::new();
-    let mut value: (String, fn(&str) -> String) = (String::new(), line_escape);
+    let mut value = String::new();
+    let mut encoding: fn(&str) -> String = line_escape;
     let mut state = INIT;
     let mut visible = false;
 
@@ -111,9 +100,9 @@ fn main() {
                 }
                 if visible {
                     if state == COLLON {
-                        print!("\"{}\"", encoding(&value));
+                        print!("\"{}\"", value);
                     } else /* state == SEQ */ {
-                        print!(",\"{}\"]", encoding(&value));
+                        print!(",\"{}\"]", value);
                     }
                 }
                 print!("}}");
@@ -126,8 +115,10 @@ fn main() {
                     continue;
                 }
                 if line.starts_with(' ') {
-                    value.0 += line.trim();
-                    assert!(value.0.len() < 65535);
+                    if visible {
+                        value += &encoding(line.trim());
+                        assert!(value.len() < 65535);
+                    }
                     continue;
                 }
 
@@ -135,15 +126,22 @@ fn main() {
                 if visible {
                     if key_ == key {
                         io::stdout().write(state).unwrap();
-                        print!("\"{}\"", encoding(&value));
-                        value = reset_value(value_);
+                        print!("\"{}\"", value);
+
+                        if value_.starts_with("::") {
+                            encoding = base64_escape;
+                            value = encoding(value_[2..].trim());
+                        } else {
+                            encoding = line_escape;
+                            value = encoding(value_[1..].trim());
+                        }
                         state = SEQ;
                         continue;
                     }
                     if state == COLLON {
-                        print!("\"{}\"", encoding(&value));
+                        print!("\"{}\"", value);
                     } else if state == SEQ {
-                        print!(",\"{}\"]", encoding(&value));
+                        print!(",\"{}\"]", value);
                     }
                 }
 
@@ -157,7 +155,13 @@ fn main() {
                         print!("\"{}\":", key);
                         state = COLLON;
                     }
-                    value = reset_value(value_);
+                    if value_.starts_with("::") {
+                        encoding = base64_escape;
+                        value = encoding(value_[2..].trim());
+                    } else {
+                        encoding = line_escape;
+                        value = encoding(value_[1..].trim());
+                    }
                 }
             },
         }
