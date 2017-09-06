@@ -100,9 +100,9 @@ fn main() {
                 }
                 if visible {
                     if state == COLLON {
-                        print!("\"{}\"", value);
+                        print!("\"{}\"", encoding(&value));
                     } else /* state == SEQ */ {
-                        print!(",\"{}\"]", value);
+                        print!(",\"{}\"]", encoding(&value));
                     }
                 }
                 print!("}}");
@@ -116,7 +116,7 @@ fn main() {
                 }
                 if line.starts_with(' ') {
                     if visible {
-                        value += &encoding(line.trim());
+                        value += line.trim();
                         assert!(value.len() < 65535);
                     }
                     continue;
@@ -126,22 +126,22 @@ fn main() {
                 if visible {
                     if key_ == key {
                         io::stdout().write(state).unwrap();
-                        print!("\"{}\"", value);
+                        print!("\"{}\"", encoding(&value));
 
                         if value_.starts_with("::") {
                             encoding = base64_escape;
-                            value = encoding(value_[2..].trim());
+                            value = value_[2..].trim().to_string();
                         } else {
                             encoding = line_escape;
-                            value = encoding(value_[1..].trim());
+                            value = value_[1..].trim().to_string();
                         }
                         state = SEQ;
                         continue;
                     }
                     if state == COLLON {
-                        print!("\"{}\"", value);
+                        print!("\"{}\"", encoding(&value));
                     } else if state == SEQ {
-                        print!(",\"{}\"]", value);
+                        print!(",\"{}\"]", encoding(&value));
                     }
                 }
 
@@ -157,10 +157,10 @@ fn main() {
                     }
                     if value_.starts_with("::") {
                         encoding = base64_escape;
-                        value = encoding(value_[2..].trim());
+                        value = value_[2..].trim().to_string();
                     } else {
                         encoding = line_escape;
-                        value = encoding(value_[1..].trim());
+                        value = value_[1..].trim().to_string();
                     }
                 }
             },
